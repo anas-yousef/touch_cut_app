@@ -9,8 +9,12 @@ typedef TokenProvider = Future<String?> Function();
 class ApiClient {
   final String baseUrl;
   final FlutterSecureStorage secureStorage;
+  final http.Client httpClient;
 
-  ApiClient({required this.baseUrl, required this.secureStorage});
+  const ApiClient(
+      {required this.baseUrl,
+      required this.secureStorage,
+      required this.httpClient});
 
   Future<String?> _getAccessToken() async {
     return await secureStorage.read(key: 'access_token');
@@ -40,7 +44,7 @@ class ApiClient {
     final refreshToken = await _getRefreshToken();
     if (refreshToken != null) {
       try {
-        final response = await http.post(
+        final response = await httpClient.post(
           Uri.parse('$baseUrl/auth/refresh'),
           body: {'refresh_token': refreshToken},
         );
@@ -91,41 +95,63 @@ class ApiClient {
     }
   }
 
+  Future<http.Response> _authenticatedRequest(
+    String method,
+    String path, {
+    int timeoutSeconds = 10, // Default timeout
+    Map<String, dynamic>? body,
+  }) async {
+    final accessToken = await _getAccessToken();
+    if (accessToken == null) {
+      throw Exception('No access token available');
+    }
+
+    final request = http.Request(method, Uri.parse('$baseUrl$path'))
+      ..headers['Authorization'] = 'Bearer $accessToken'
+      ..headers['Content-Type'] = 'application/json'
+      ..body = jsonEncode(body);
+
+    // httpClient.send can be used to set a custom timeout
+    final streamedResponse = await httpClient
+        .send(request)
+        .timeout(Duration(seconds: timeoutSeconds)); // Set timeout
+
+    // Below method closes the connection after it has been used to create an http.Response object.
+    // This method creates an http.Response object from a stream of bytes,
+    // which allows us to read the response body asynchronously when needed.
+    return http.Response.fromStream(streamedResponse);
+  }
+
   Future<http.Response> get(String path) async {
     return _handleRequest(() async {
-      final accessToken = await _getAccessToken();
-      if (accessToken == null) {
-        throw Exception('No access token available');
-      }
-
-      return await http.get(
-        Uri.parse('$baseUrl$path'),
-        headers: {
-          // HttpHeaders.contentTypeHeader: ContentType.json.value,
-          // HttpHeaders.acceptHeader: ContentType.json.value,
-          'Authorization': 'Bearer $accessToken'
-        },
-      );
+      return await _authenticatedRequest('GET', path);
     });
   }
 
   Future<http.Response> post(String path,
       {required Map<String, dynamic> body}) async {
     return _handleRequest(() async {
-      final accessToken = await _getAccessToken();
-      if (accessToken == null) {
-        throw Exception('No access token available');
-      }
+      return await _authenticatedRequest('POST', path, body: body);
+    });
+  }
 
-      return await http.post(
-        Uri.parse('$baseUrl$path'),
-        headers: {
-          HttpHeaders.contentTypeHeader: ContentType.json.value,
-          // HttpHeaders.acceptHeader: ContentType.json.value,
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: jsonEncode(body),
-      );
+  Future<http.Response> delete(String path) async {
+    return _handleRequest(() async {
+      return await _authenticatedRequest('DELETE', path);
+    });
+  }
+
+  Future<http.Response> patch(String path,
+      {required Map<String, dynamic> body}) async {
+    return _handleRequest(() async {
+      return await _authenticatedRequest('PATCH', path, body: body);
+    });
+  }
+
+  Future<http.Response> put(String path,
+      {required Map<String, dynamic> body}) async {
+    return _handleRequest(() async {
+      return await _authenticatedRequest('PUT', path, body: body);
     });
   }
 }
