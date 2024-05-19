@@ -64,27 +64,30 @@ class _NoInternetScreenState extends State<NoInternetScreen> {
                     _isConnected ? 'Connected' : 'No internet connection',
                   ),
             ElevatedButton(
-              onPressed: () {
-                if (!_checkingConnection) {
-                  setState(
-                    () {
-                      // Set checking connection to true when retry is pressed
-                      _checkingConnection = true;
+              onPressed: _checkingConnection
+                  ? null
+                  : () {
+                      if (!_checkingConnection) {
+                        setState(
+                          () {
+                            // Set checking connection to true when retry is pressed
+                            _checkingConnection = true;
+                          },
+                        );
+                        // Check internet connection again
+                        _checkInternetConnection().then((_) {
+                          if (_isConnected) {
+                            // If internet connection is restored, pop the screen
+                            widget.customBackPage == null
+                                ? context.pop()
+                                : context
+                                    .pushReplacement(widget.customBackPage!);
+                          } else {
+                            // If no internet connection, do nothing
+                          }
+                        });
+                      }
                     },
-                  );
-                  // Check internet connection again
-                  _checkInternetConnection().then((_) {
-                    if (_isConnected) {
-                      // If internet connection is restored, pop the screen
-                      widget.customBackPage == null
-                          ? context.pop()
-                          : context.pushReplacement(widget.customBackPage!);
-                    } else {
-                      // If no internet connection, do nothing
-                    }
-                  });
-                }
-              },
               child: _checkingConnection
                   ? Text('Checking...')
                   : _isConnected
